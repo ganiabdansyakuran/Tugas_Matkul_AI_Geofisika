@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Batimetri Danau Unhas - Model 3D &amp; Morfometri</title>
+  
+  <!-- Modern Stylesheet Lokal -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="libs/leaflet.css">
+
+  <!-- Pustaka JavaScript Lokal (100% Offline Tanpa CDN) -->
+  <script src="libs/plotly.min.js"></script>
+  <script src="libs/delaunator.min.js"></script>
+  <script src="libs/d3-delaunay.min.js"></script>
+  <script src="libs/proj4.js"></script>
+  <script src="libs/d3-array.min.js"></script>
+  <script src="libs/d3-contour.min.js"></script>
+  <script src="libs/leaflet.js"></script>
+  
+  <!-- Data Batimetri Danau Lokal -->
+  <script src="data.js"></script>
+</head>
+<body>
+
+  <!-- =====================================================================
+       SVG SPRITE DEFINITIONS (hidden, reusable via <use href="#icon-...">)
+       viewBox 0 0 24 24, stroke="currentColor", fill="none"
+  ====================================================================== -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <!-- Gelombang / Brand icon (filled gradient handled via CSS) -->
+    <symbol id="icon-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12c1.5-2 3-3 4.5-2s3 3 4.5 2 3-3 4.5-2 3 3 4.5 2"/>
+      <path d="M2 17c1.5-2 3-3 4.5-2s3 3 4.5 2 3-3 4.5-2 3 3 4.5 2"/>
+      <path d="M2 7c1.5-2 3-3 4.5-2s3 3 4.5 2 3-3 4.5-2 3 3 4.5 2"/>
+    </symbol>
+
+    <!-- Kalender / Tanggal survei -->
+    <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </symbol>
+
+    <!-- Bulan (mode gelap aktif) -->
+    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </symbol>
+
+    <!-- Matahari (mode terang aktif) -->
+    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </symbol>
+
+    <!-- Kamera + panah unduh (unduh 3D PNG) -->
+    <symbol id="icon-camera-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+      <line x1="12" y1="15" x2="12" y2="20"/>
+      <polyline points="9 18 12 21 15 18"/>
+    </symbol>
+
+    <!-- Dokumen + panah unduh (unduh CSV) -->
+    <symbol id="icon-csv-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="12" y1="13" x2="12" y2="18"/>
+      <polyline points="9 16 12 19 15 16"/>
+      <line x1="8" y1="12" x2="16" y2="12"/>
+    </symbol>
+
+    <!-- Panah memutar (reset) -->
+    <symbol id="icon-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="1 4 1 10 7 10"/>
+      <path d="M3.51 15a9 9 0 1 0 .49-4"/>
+    </symbol>
+
+    <!-- Putar / Play (auto-rotate) -->
+    <symbol id="icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </symbol>
+
+    <!-- Berhenti / Stop (saat putar aktif) -->
+    <symbol id="icon-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+    </symbol>
+
+    <!-- Penggaris/area (luas) -->
+    <symbol id="icon-area" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="1"/>
+      <line x1="3" y1="9" x2="21" y2="9"/>
+      <line x1="9" y1="3" x2="9" y2="21"/>
+    </symbol>
+
+    <!-- Tetesan air (volume) -->
+    <symbol id="icon-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+    </symbol>
+
+    <!-- Panah ke bawah / kedalaman max -->
+    <symbol id="icon-depth-max" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="3" x2="12" y2="21"/>
+      <polyline points="17 16 12 21 7 16"/>
+      <line x1="5" y1="3" x2="19" y2="3"/>
+    </symbol>
+
+    <!-- Grafik batang (kedalaman rata-rata) -->
+    <symbol id="icon-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+      <line x1="2" y1="20" x2="22" y2="20"/>
+    </symbol>
+
+    <!-- Pin lokasi (jumlah titik) -->
+    <symbol id="icon-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </symbol>
+
+    <!-- Garis rute (jalur survei) -->
+    <symbol id="icon-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 11l19-9-9 19-2-8-8-2z"/>
+    </symbol>
+
+    <!-- Globe 3D (model 3D) -->
+    <symbol id="icon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+
+    <!-- Peta (kontur 2D) -->
+    <symbol id="icon-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+      <line x1="8" y1="2" x2="8" y2="18"/>
+      <line x1="16" y1="6" x2="16" y2="22"/>
+    </symbol>
+
+    <!-- Gunting (penampang melintang) -->
+    <symbol id="icon-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6" cy="6" r="3"/>
+      <circle cx="6" cy="18" r="3"/>
+      <line x1="20" y1="4" x2="8.12" y2="15.88"/>
+      <line x1="14.47" y1="14.48" x2="20" y2="20"/>
+      <line x1="8.12" y1="8.12" x2="12" y2="12"/>
+    </symbol>
+
+    <!-- Kapal / jalur survei echosounder -->
+    <symbol id="icon-sonar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 17h18M5 17l2-7h10l2 7"/>
+      <path d="M12 10V4"/>
+      <path d="M9 7l3-3 3 3"/>
+    </symbol>
+
+    <!-- Grafik distribusi (histogram) -->
+    <symbol id="icon-histogram" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="10" width="4" height="10"/>
+      <rect x="8" y="5" width="4" height="15"/>
+      <rect x="14" y="8" width="4" height="12"/>
+      <rect x="20" y="13" width="2" height="7"/>
+      <line x1="2" y1="20" x2="22" y2="20"/>
+    </symbol>
+
+    <!-- Grafik garis naik (karakteristik kedalaman tiap jalur) -->
+    <symbol id="icon-line-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="22 12 18 8 14 12 10 8 6 14 2 10"/>
+      <line x1="2" y1="20" x2="22" y2="20"/>
+    </symbol>
+
+    <!-- Gelombang / muka air (WSE) -->
+    <symbol id="icon-water-level" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 8c1.5-2 3-3 4.5-2s3 3 4.5 2 3-3 4.5-2 3 3 4.5 2"/>
+      <rect x="2" y="8" width="20" height="12" rx="1" fill="none"/>
+    </symbol>
+
+    <!-- Daftar / zona kedalaman -->
+    <symbol id="icon-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+      <polyline points="2 17 12 22 22 17"/>
+      <polyline points="2 12 12 17 22 12"/>
+    </symbol>
+
+    <!-- Info (tentang data) -->
+    <symbol id="icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="8.01"/>
+      <line x1="12" y1="12" x2="12" y2="16"/>
+    </symbol>
+
+    <!-- Pin lokasi kecil (Sumber Data) -->
+    <symbol id="icon-pin-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </symbol>
+
+    <!-- Penggaris (rekonstruksi mesh) -->
+    <symbol id="icon-ruler" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 5h18v14H3z"/>
+      <line x1="7" y1="5" x2="7" y2="19"/>
+      <line x1="12" y1="5" x2="12" y2="12"/>
+      <line x1="17" y1="5" x2="17" y2="19"/>
+    </symbol>
+
+    <!-- Peringatan segitiga (catatan interpolasi) -->
+    <symbol id="icon-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </symbol>
+
+    <!-- Bola lampu (insight) -->
+    <symbol id="icon-lightbulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="9" y1="18" x2="15" y2="18"/>
+      <line x1="10" y1="22" x2="14" y2="22"/>
+      <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/>
+    </symbol>
+
+    <!-- Panah atas (spinner) -->
+    <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="18 15 12 9 6 15"/>
+    </symbol>
+
+    <!-- Corong filter (Terapkan Filter) -->
+    <symbol id="icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+    </symbol>
+
+    <!-- Tanda centang (Filter Selesai Diterapkan) -->
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
+
+    <!-- Peta / Map -->
+    <symbol id="icon-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+      <line x1="8" y1="2" x2="8" y2="18"/>
+      <line x1="16" y1="6" x2="16" y2="22"/>
+    </symbol>
+
+    <!-- Fokus / Zoom ke danau -->
+    <symbol id="icon-focus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+      <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+    </symbol>
+  </svg>
+
+  <!-- HEADER UTAMA -->
+  <header class="header-container">
+    <div class="header-content">
+      <div class="brand-section">
+        <div class="brand-icon">
+          <svg width="22" height="22" aria-hidden="true"><use href="#icon-wave"/></svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Dashboard Batimetri Danau Unhas</h1>
+          <p class="brand-subtitle">Pemodelan 3D Interaktif, Morfometri, &amp; Analisis Spasial Kedalaman Danau Kampus Tamalanrea</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <span class="badge-tag" title="CRS: sistem koordinat yang dipakai pada data posisi titik ukur (UTM zona 50 Selatan, satuan meter)">
+          <span style="color: var(--accent-emerald);">●</span> Sistem Koordinat (CRS): UTM 50S (EPSG:32750)
+        </span>
+        <span class="badge-tag" id="survey-date-badge" title="Tanggal pengambilan data batimetri di lapangan">
+          <svg width="14" height="14" aria-hidden="true" style="flex-shrink:0"><use href="#icon-calendar"/></svg>
+          Tanggal Survei: 8 Oktober 2026
+        </span>
+        
+        <!-- Tombol Unduh & Tema -->
+        <button id="btn-theme-toggle" class="btn btn-secondary btn-icon" title="Ganti Tema (Gelap/Terang)" aria-label="Ganti tema gelap atau terang">
+          <svg id="theme-icon" width="18" height="18" aria-hidden="true"><use href="#icon-moon"/></svg>
+        </button>
+        <button id="btn-download-3d" class="btn btn-secondary" title="Unduh tangkapan layar Model 3D">
+          <svg width="18" height="18" aria-hidden="true"><use href="#icon-camera-dl"/></svg>
+          Unduh 3D (PNG)
+        </button>
+        <button id="btn-download-csv" class="btn btn-primary" title="Unduh data survei terfilter ke CSV">
+          <svg width="18" height="18" aria-hidden="true"><use href="#icon-csv-dl"/></svg>
+          Unduh CSV
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- KONTEN UTAMA -->
+  <main class="main-wrapper">
+
+    <!-- GLOBAL FILTER BAR -->
+    <section class="filter-card">
+      <!-- Baris 1: Kontrol Filter (Jalur & Rentang Kedalaman) -->
+      <div class="filter-row-controls">
+        <div class="filter-group-block">
+          <div class="filter-group-title">Pilih Jalur Survei (Sounding Lines)</div>
+          <div class="filter-items" id="line-filter-container">
+            <!-- Diisi secara dinamis oleh app.js -->
+          </div>
+        </div>
+
+        <div class="filter-group-block">
+          <div class="filter-group-title">Filter Rentang Kedalaman (Depth)</div>
+          <div class="range-slider-wrapper">
+            <div class="filter-input-pair">
+              <span>Min:</span>
+              <input type="range" id="filter-depth-min" min="0" max="2.2" step="0.01" value="0">
+              <!-- Wrapper spinner kustom -->
+              <div class="spinner-input-wrap">
+                <input type="number" id="input-depth-min" min="0" max="2.2" step="0.01" value="0.00"
+                       class="number-input-control" title="Kedalaman minimum (meter)"
+                       aria-label="Kedalaman minimum">
+                <div class="spinner-btns">
+                  <button class="spinner-btn" id="spin-min-up" tabindex="-1"
+                          aria-label="Tambah kedalaman minimum" type="button">
+                    <svg width="12" height="12" aria-hidden="true"><use href="#icon-chevron-up"/></svg>
+                  </button>
+                  <button class="spinner-btn" id="spin-min-down" tabindex="-1"
+                          aria-label="Kurangi kedalaman minimum" type="button">
+                    <svg width="12" height="12" aria-hidden="true"><use href="#icon-chevron-down"/></svg>
+                  </button>
+                </div>
+              </div>
+              <span class="unit-label">m</span>
+            </div>
+            
+            <div class="filter-input-pair">
+              <span>Maks:</span>
+              <input type="range" id="filter-depth-max" min="0" max="2.2" step="0.01" value="2.2">
+              <!-- Wrapper spinner kustom -->
+              <div class="spinner-input-wrap">
+                <input type="number" id="input-depth-max" min="0" max="2.2" step="0.01" value="2.20"
+                       class="number-input-control" title="Kedalaman maksimum (meter)"
+                       aria-label="Kedalaman maksimum">
+                <div class="spinner-btns">
+                  <button class="spinner-btn" id="spin-max-up" tabindex="-1"
+                          aria-label="Tambah kedalaman maksimum" type="button">
+                    <svg width="12" height="12" aria-hidden="true"><use href="#icon-chevron-up"/></svg>
+                  </button>
+                  <button class="spinner-btn" id="spin-max-down" tabindex="-1"
+                          aria-label="Kurangi kedalaman maksimum" type="button">
+                    <svg width="12" height="12" aria-hidden="true"><use href="#icon-chevron-down"/></svg>
+                  </button>
+                </div>
+              </div>
+              <span class="unit-label">m</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Baris 2: Tombol Aksi dan Badge Status (Sejajar Kiri) -->
+      <div class="filter-row-actions">
+        <button id="btn-apply-filter" class="btn btn-primary btn-filter-action" title="Terapkan pilihan jalur dan rentang kedalaman ke seluruh dashboard" aria-label="Terapkan pilihan jalur dan rentang kedalaman ke seluruh dashboard" disabled>
+          <svg width="16" height="16" aria-hidden="true"><use href="#icon-filter"/></svg>
+          <span id="btn-apply-filter-text">Terapkan Filter</span>
+        </button>
+        <button id="btn-reset-filter" class="btn btn-secondary btn-filter-action" title="Kembalikan semua jalur dan rentang kedalaman penuh" aria-label="Reset filter ke default">
+          <svg width="16" height="16" aria-hidden="true"><use href="#icon-reset"/></svg>
+          Reset Filter
+        </button>
+        <span id="filter-status-badge" class="filter-status-badge is-applied" role="status" aria-live="polite">
+          <span class="badge-status-indicator" id="filter-status-icon">
+            <svg width="14" height="14" aria-hidden="true"><use href="#icon-check"/></svg>
+          </span>
+          <span id="filter-status-text">Filter sudah diterapkan</span>
+        </span>
+      </div>
+
+      <!-- Baris 3: Teks Bantuan -->
+      <div class="filter-help-text">
+        Atur pilihan jalur atau rentang kedalaman di atas, lalu tekan <strong>Terapkan Filter</strong> untuk memperbarui seluruh visualisasi dashboard.
+      </div>
+    </section>
+
+    <!-- KARTU METRIK UTAMA (KPI CARDS) -->
+    <section class="kpi-grid">
+      <!-- 1. Luas Danau -->
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">LUAS PERMUKAAN DANAU</span>
+          <span class="kpi-icon">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-area"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value-container">
+          <span class="kpi-value" id="kpi-area">0</span>
+          <span class="kpi-unit">m²</span>
+        </div>
+        <p class="kpi-subtext" id="kpi-area-ha">Dihitung dengan rumus Shoelace polygon</p>
+      </div>
+
+      <!-- 2. Volume Air -->
+      <div class="kpi-card emerald">
+        <div class="kpi-header">
+          <span class="kpi-label">ESTIMASI VOLUME AIR</span>
+          <span class="kpi-icon">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-drop"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value-container">
+          <span class="kpi-value" id="kpi-volume">0</span>
+          <span class="kpi-unit">m³</span>
+        </div>
+        <p class="kpi-subtext" id="kpi-volume-liters">Integrasi prisma prisma Delaunay</p>
+      </div>
+
+      <!-- 3. Kedalaman Maksimum -->
+      <div class="kpi-card rose">
+        <div class="kpi-header">
+          <span class="kpi-label">KEDALAMAN MAKSIMUM</span>
+          <span class="kpi-icon">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-depth-max"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value-container">
+          <span class="kpi-value" id="kpi-max-depth">0.00</span>
+          <span class="kpi-unit">meter</span>
+        </div>
+        <p class="kpi-subtext" id="kpi-max-depth-loc">Cekungan basin utama</p>
+      </div>
+
+      <!-- 4. Kedalaman Rata-rata -->
+      <div class="kpi-card indigo">
+        <div class="kpi-header">
+          <span class="kpi-label">KEDALAMAN RATA-RATA</span>
+          <span class="kpi-icon">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-bar-chart"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value-container">
+          <span class="kpi-value" id="kpi-mean-depth">0.00</span>
+          <span class="kpi-unit">meter</span>
+        </div>
+        <p class="kpi-subtext" id="kpi-median-depth">Median: 0.00 m</p>
+      </div>
+
+      <!-- 5. Total Titik Survei -->
+      <div class="kpi-card amber">
+        <div class="kpi-header">
+          <span class="kpi-label">TOTAL TITIK UKUR AKTIF</span>
+          <span class="kpi-icon">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-pin"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value-container">
+          <span class="kpi-value" id="kpi-points-count">0</span>
+          <span class="kpi-unit">titik</span>
+        </div>
+        <p class="kpi-subtext" id="kpi-boundary-count">+0 titik batas tepi pantai</p>
+      </div>
+
+      <!-- 6. Total Panjang Jalur -->
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">JALUR &amp; TRAYEK SURVEI</span>
+          <span class="kpi-icon">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-route"/></svg>
+          </span>
+        </div>
+        <div class="kpi-value-container">
+          <span class="kpi-value" id="kpi-track-length">0.0</span>
+          <span class="kpi-unit">meter</span>
+        </div>
+        <p class="kpi-subtext" id="kpi-lines-count">3 Jalur Echosounder</p>
+      </div>
+    </section>
+
+    <!-- SECTION MODEL 3D UTAMA (FULL WIDTH) -->
+    <section class="chart-card col-12">
+      <div class="chart-card-header">
+        <div class="chart-title-area">
+          <h2 class="chart-title">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-globe"/></svg>
+            Model 3D Batimetri Danau Unhas (Interaktif)
+          </h2>
+          <p class="chart-explanation">
+            Model elevasi 3D dasar danau yang dibangun dari triangulasi Delaunay titik survei echosounder dan garis tepi danau (Z = 0). 
+            Pilih ikon rotasi di pojok kanan atas untuk memutar model 360°, ikon geser untuk pan, atau gunakan mouse dan sentuhan layar secara bebas.
+          </p>
+        </div>
+
+        <!-- Toolbar Kontrol 3D -->
+        <div class="controls-toolbar">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="control-label">Vertical Exaggeration:</span>
+            <input type="range" id="ctrl-ve" min="1" max="25" step="0.5" value="5">
+            <span class="range-value" id="ctrl-ve-val">5.0x</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="control-label">Colorscale:</span>
+            <select id="ctrl-colorscale" class="select-control">
+              <option value="Viridis" selected>Viridis (Standar)</option>
+              <option value="Blues">Blues (Kedalaman Air)</option>
+              <option value="Turbo">Turbo (Spektrum Tinggi)</option>
+              <option value="Cividis">Cividis (Aksesibilitas)</option>
+              <option value="Tealrose">Tealrose (Dua Warna)</option>
+            </select>
+          </div>
+
+          <label class="filter-pill" style="padding: 4px 10px; font-size: 0.78rem;">
+            <input type="checkbox" id="ctrl-show-points">
+            <span>Titik Survei</span>
+          </label>
+
+          <button id="btn-autorotate" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 12px;">
+            <svg id="icon-rotate-btn" width="16" height="16" aria-hidden="true"><use href="#icon-play"/></svg>
+            Putar Otomatis
+          </button>
+          
+          <button id="btn-reset-cam" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 12px;">
+            <svg width="16" height="16" aria-hidden="true"><use href="#icon-reset"/></svg>
+            Reset Kamera
+          </button>
+        </div>
+      </div>
+
+      <!-- Container Canvas 3D Plotly -->
+      <div id="plot-3d" class="chart-container large">
+        <div class="loading-overlay" id="loading-3d">
+          <div class="spinner"></div>
+          <span style="font-size: 0.85rem; color: var(--accent-cyan);">Membangun mesh 3D batimetri...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION GRID 2 BARIS: PETA 2D KONTUR & PENAMPANG MELINTANG -->
+    <div class="dashboard-grid">
+      <!-- PETA 2D KONTUR KEDALAMAN -->
+      <div class="chart-card col-6">
+        <div class="chart-card-header">
+          <div class="chart-title-area">
+            <h3 class="chart-title">
+              <svg width="20" height="20" aria-hidden="true"><use href="#icon-map"/></svg>
+              Peta 2D Kontur Kedalaman
+            </h3>
+            <p class="chart-explanation">
+              Peta isobath (kontur kedalaman yang sama) tampak atas dengan garis tepi danau (merah) dan garis kuning putus-putus yang menandakan lokasi penampang melintang aktif.
+            </p>
+          </div>
+        </div>
+        <div id="plot-2d-contour" class="chart-container medium"></div>
+      </div>
+
+      <!-- PENAMPANG MELINTANG (CROSS-SECTION PROFILE) -->
+      <div class="chart-card col-6">
+        <div class="chart-card-header">
+          <div class="chart-title-area">
+            <h3 class="chart-title">
+              <svg width="20" height="20" aria-hidden="true"><use href="#icon-scissors"/></svg>
+              Penampang Melintang Dasar Danau (Cross-Section)
+            </h3>
+            <p class="chart-explanation">
+              Profil vertikal danau seolah danau dibelah. Area biru menggambarkan massa air, dan garis gelap di bawahnya merupakan dasar danau pada posisi irisan terpilih.
+            </p>
+          </div>
+
+          <!-- Cross-section Controls -->
+          <div class="cross-section-toolbar">
+            <div class="cross-section-group slice-direction-group">
+              <span class="control-label">Arah Potongan:</span>
+              <div class="tab-buttons">
+                <button id="btn-slice-we" class="tab-btn active">Barat - Timur (E)</button>
+                <button id="btn-slice-sn" class="tab-btn">Utara - Selatan (N)</button>
+              </div>
+            </div>
+
+            <div class="cross-section-group slice-position-group">
+              <span class="control-label" id="lbl-slice-axis">Posisi N:</span>
+              <input type="range" id="slider-slice-pos" min="0" max="100" value="50">
+              <span class="range-value" id="val-slice-coord">0.00 m</span>
+            </div>
+          </div>
+        </div>
+        <div id="plot-cross-section" class="chart-container medium"></div>
+      </div>
+    </div>
+
+    <!-- SECTION GRID: PETA JALUR SURVEI & HISTOGRAM DISTRIBUSI -->
+    <div class="dashboard-grid">
+      <!-- PETA JALUR SURVEI -->
+      <div class="chart-card col-6">
+        <div class="chart-card-header">
+          <div class="chart-title-area">
+            <h3 class="chart-title">
+              <svg width="20" height="20" aria-hidden="true"><use href="#icon-sonar"/></svg>
+              Peta Jalur Survei Echosounder
+            </h3>
+            <p class="chart-explanation">
+              Titik-titik sounding dikelompokkan berdasarkan jalur survei di atas batas poligon tepi danau. Centang atau hapus centang pada legenda untuk menampilkan atau menyembunyikan data.
+            </p>
+          </div>
+        </div>
+        <div id="legend-tracks" class="chart-custom-legend"></div>
+        <div id="plot-tracks" class="chart-container medium"></div>
+      </div>
+
+      <!-- HISTOGRAM DISTRIBUSI KEDALAMAN -->
+      <div class="chart-card col-6">
+        <div class="chart-card-header">
+          <div class="chart-title-area">
+            <h3 class="chart-title">
+              <svg width="20" height="20" aria-hidden="true"><use href="#icon-histogram"/></svg>
+              Distribusi Frekuensi Kedalaman
+            </h3>
+            <p class="chart-explanation">
+              Histogram sebaran kedalaman air danau beserta garis rata-rata (merah putus-putus) dan median (ungu putus-putus). Drag mouse pada area grafik untuk memperbesar (zoom).
+            </p>
+          </div>
+        </div>
+        <div id="plot-histogram" class="chart-container medium"></div>
+      </div>
+    </div>
+
+    <!-- SECTION GRID: PROFIL KEDALAMAN VS WAKTU & KESTABILAN MUKA AIR -->
+    <div class="dashboard-grid">
+      <!-- KEDALAMAN VS WAKTU / BOXPLOT -->
+      <div class="chart-card col-6">
+        <div class="chart-card-header">
+          <div class="chart-title-area">
+            <h3 class="chart-title">
+              <svg width="20" height="20" aria-hidden="true"><use href="#icon-line-chart"/></svg>
+              Karakteristik Kedalaman Tiap Jalur
+            </h3>
+            <p class="chart-explanation">
+              Membandingkan profil kedalaman dan distribusi box plot per jalur survei. Centang atau hapus centang pada legenda untuk menampilkan atau menyembunyikan data.
+            </p>
+          </div>
+
+          <div class="tab-buttons">
+            <button id="btn-tab-timeseries" class="tab-btn active">Kedalaman vs Waktu</button>
+            <button id="btn-tab-boxplot" class="tab-btn">Box Plot Jalur</button>
+          </div>
+        </div>
+        <div id="legend-lines" class="chart-custom-legend"></div>
+        <div id="plot-depth-series" class="chart-container medium"></div>
+        <div id="plot-boxplot" class="chart-container medium" style="display: none;"></div>
+      </div>
+
+      <!-- KESTABILAN MUKA AIR DANAU (WSE) -->
+      <div class="chart-card col-6">
+        <div class="chart-card-header">
+          <div class="chart-title-area">
+            <h3 class="chart-title">
+              <svg width="20" height="20" aria-hidden="true"><use href="#icon-water-level"/></svg>
+              Variasi Tinggi Muka Air (Water Surface H)
+            </h3>
+            <p class="chart-explanation">
+              Tinggi muka air danau yang tercatat sensor selama survei echosounder (~30 menit). Centang atau hapus centang pada legenda untuk menampilkan atau menyembunyikan data.
+            </p>
+          </div>
+        </div>
+        <div id="legend-wse" class="chart-custom-legend"></div>
+        <div id="plot-wse" class="chart-container medium"></div>
+      </div>
+    </div>
+
+    <!-- SECTION KLASIFIKASI ZONA KEDALAMAN (TABEL & DONUT CHART) -->
+    <section class="chart-card col-12">
+      <div class="chart-card-header">
+        <div class="chart-title-area">
+          <h3 class="chart-title">
+            <svg width="20" height="20" aria-hidden="true"><use href="#icon-layers"/></svg>
+            Klasifikasi Zona Kedalaman &amp; Kapasitas Tampung
+          </h3>
+          <p class="chart-explanation">
+            Pembagian morfometri danau ke dalam 4 kelas kedalaman perairan beserta luas cakupan, persentase luas, dan estimasi volume air pada masing-masing zona.
+          </p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; align-items: center;">
+        <!-- Tabel Zona -->
+        <div class="zone-table-container">
+          <table class="zone-table">
+            <thead>
+              <tr>
+                <th>Klasifikasi Zona</th>
+                <th>Rentang Kedalaman</th>
+                <th>Luas (m²)</th>
+                <th>Luas (ha)</th>
+                <th>Persen (%)</th>
+                <th>Est. Volume (m³)</th>
+              </tr>
+            </thead>
+            <tbody id="zone-table-body">
+              <!-- Diisi otomatis oleh app.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Donut Chart -->
+        <div id="plot-donut-zones" style="min-height: 280px; width: 100%;"></div>
+      </div>
+    </section>
+
+    <!-- PANEL TENTANG DATA, METODOLOGI & INSIGHT OTOMATIS -->
+    <section class="info-card col-12">
+      <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+        <svg width="20" height="20" aria-hidden="true"><use href="#icon-info"/></svg>
+        Tentang Data, Metodologi, &amp; Catatan Teknis
+      </h3>
+
+      <div class="info-grid">
+        <!-- Kotak 1: Sumber Data & Koordinat -->
+        <div class="info-box">
+          <h4 class="info-box-title">
+            <svg width="18" height="18" aria-hidden="true"><use href="#icon-pin-sm"/></svg>
+            Sumber Data &amp; Sistem Koordinat
+          </h4>
+          <p>
+            Data survei diperoleh menggunakan instrumen <em>Single-beam Acoustic Echosounder</em> yang terintegrasi dengan GNSS positioning.
+            Sistem proyeksi koordinat yang digunakan adalah <strong>UTM Zone 50S (EPSG:32750)</strong> dengan satuan meter.
+            Garis keliling tepi danau merupakan hasil digitasi citra satelit resolusi tinggi menggunakan software QGIS.
+          </p>
+        </div>
+
+        <!-- Kotak 2: Acuan Muka Air & Triangulasi Delaunay -->
+        <div class="info-box">
+          <h4 class="info-box-title">
+            <svg width="18" height="18" aria-hidden="true"><use href="#icon-ruler"/></svg>
+            Rekonstruksi Mesh &amp; Delaunay
+          </h4>
+          <p>
+            Permukaan air danau ditetapkan sebagai bidang referensi nol (<span class="insight-highlight">Z = 0.00 m</span>).
+            Seluruh titik di sepanjang garis pantai diberi kedalaman nol.
+            Rekonstruksi model 3D menggunakan <strong>Triangulasi Delaunay</strong> yang diperluas dengan penyaringan segitiga di luar poligon tepi danau.
+            Estimasi volume dihitung melalui integrasi volume prisma segitiga tegak (<span class="insight-highlight">V = A_tri × d_mean</span>).
+          </p>
+        </div>
+
+        <!-- Kotak 3: Catatan Interpolasi Shoreline & Area Celah -->
+        <div class="info-box">
+          <h4 class="info-box-title">
+            <svg width="18" height="18" aria-hidden="true"><use href="#icon-warning"/></svg>
+            Catatan Interpolasi Tepi Danau &amp; Area Celah
+          </h4>
+          <p>
+            Kapal survei echosounder memiliki keterbatasan sarat air (draft) sehingga tidak dapat merapat langsung ke bibir danau. 
+            Oleh karena itu, <strong>zona celah di antara titik ukur terluar dan garis tepi danau diisi dengan interpolasi linier jarak</strong>, 
+            di mana kedalaman menurun secara bertahap dari titik ukur terluar menuju 0 tepat di garis tepi danau. 
+            Nilai kedalaman pada zona celah dan area tanpa pengukuran ini merupakan perkiraan matematis, bukan hasil ukur langsung.
+          </p>
+        </div>
+
+        <!-- Kotak 4: Insight Otomatis -->
+        <div class="info-box" style="border-color: rgba(245, 158, 11, 0.4);">
+          <h4 class="info-box-title" style="color: var(--accent-amber);">
+            <svg width="18" height="18" aria-hidden="true"><use href="#icon-lightbulb"/></svg>
+            Insight Otomatis Danau Unhas
+          </h4>
+          <p id="insight-text">
+            Menganalisis data survei...
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         KARTU TERAKHIR: PETA KONTUR KEDALAMAN DAN BASEMAP (LEBAR PENUH)
+    ====================================================================== -->
+    <section class="chart-card col-12" id="card-basemap-contour">
+      <div class="chart-card-header">
+        <div class="chart-title-area">
+          <h2 class="chart-title">
+            <svg width="22" height="22" aria-hidden="true"><use href="#icon-map"/></svg>
+            Peta Kontur Kedalaman dan Basemap
+          </h2>
+          <p class="chart-explanation">
+            Peta interaktif batimetri Danau Unhas dengan lapisan kontur kedalaman 2D, batas tepi danau, dan jalur pemeruman akustik di atas citra satelit atau peta jalan. Mendukung navigasi perbesaran, pergeseran peta, serta pembacaan koordinat dan kedalaman secara langsung.
+          </p>
+        </div>
+
+        <!-- Toolbar Kontrol Peta & Basemap -->
+        <div class="basemap-toolbar">
+          <!-- Segmented Basemap Switcher -->
+          <div class="basemap-control-group">
+            <span class="control-label">Peta Dasar:</span>
+            <div class="segmented-control" role="radiogroup" aria-label="Pilihan Peta Dasar">
+              <label class="segmented-option">
+                <input type="radio" name="basemap-layer" value="satellite" checked>
+                <span>Google Satelit</span>
+              </label>
+              <label class="segmented-option">
+                <input type="radio" name="basemap-layer" value="roadmap">
+                <span>Google Maps</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Pilihan Interval Kontur -->
+          <div class="basemap-control-group">
+            <label for="select-contour-interval" class="control-label">Interval Kontur:</label>
+            <select id="select-contour-interval" class="select-control">
+              <option value="0.1">0.1 m</option>
+              <option value="0.2" selected>0.2 m</option>
+              <option value="0.25">0.25 m</option>
+              <option value="0.5">0.5 m</option>
+            </select>
+          </div>
+
+          <!-- Slider Transparansi Kontur -->
+          <div class="basemap-control-group">
+            <label for="slider-contour-opacity" class="control-label">Transparansi Kontur:</label>
+            <input type="range" id="slider-contour-opacity" min="0" max="100" value="35" step="5" class="slider-control" style="width: 100px;">
+            <span id="val-contour-opacity" class="control-value-badge">35%</span>
+          </div>
+
+          <!-- Tombol Zoom ke Danau -->
+          <button id="btn-zoom-to-lake" class="btn btn-secondary btn-sm" title="Posisikan peta ke seluruh danau" type="button">
+            <svg width="16" height="16" aria-hidden="true"><use href="#icon-focus"/></svg>
+            <span>Zoom ke danau</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Legenda Lapisan Peta dengan Checkbox -->
+      <div class="chart-custom-legend" id="legend-basemap-layers">
+        <div class="legend-items-group">
+          <label class="legend-pill">
+            <input type="checkbox" id="layer-cb-contours" checked>
+            <span class="legend-swatch" style="background: linear-gradient(135deg, #440154, #21918c, #fde725);"></span>
+            <span>Kontur 2D Kedalaman</span>
+          </label>
+          <label class="legend-pill">
+            <input type="checkbox" id="layer-cb-boundary" checked>
+            <span class="legend-swatch line-swatch" style="background: #ff3b5c;"></span>
+            <span>Batas Tepi Danau</span>
+          </label>
+          <label class="legend-pill">
+            <input type="checkbox" id="layer-cb-tracks" checked>
+            <span class="legend-swatch line-swatch" style="background: #00e5ff;"></span>
+            <span>Jalur Pemeruman</span>
+          </label>
+        </div>
+        <button type="button" class="btn-legend-toggle" id="btn-toggle-basemap-layers">Kosongkan</button>
+      </div>
+
+      <!-- Area Kontainer Peta Leaflet -->
+      <div class="basemap-map-wrapper">
+        <div id="basemap-notice-banner" class="basemap-notice-banner" style="display: none;" role="alert">
+          <svg width="18" height="18" aria-hidden="true"><use href="#icon-warning"/></svg>
+          <span>Peta dasar tidak dapat dimuat (periksa koneksi internet). Kontur dan jalur tetap ditampilkan.</span>
+        </div>
+        <div id="map-basemap-container" class="basemap-map-container"></div>
+      </div>
+
+      <!-- Catatan Atribusi Bawah -->
+      <div class="basemap-attribution-note">
+        Peta dasar: Google. Memerlukan koneksi internet.
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div>
+      <strong>Dashboard Batimetri Danau Unhas</strong> — Tugas 4 Mata Kuliah AI Geofisika
+    </div>
+    <div>
+      Teknologi: HTML5, CSS3, Vanilla JS, Plotly.js, Delaunator | Beroperasi 100% Offline
+    </div>
+  </footer>
+
+  <!-- SCRIPT LOGIKA UTAMA DASHBOARD -->
+  <script src="app.js"></script>
+
+</body>
+</html>
